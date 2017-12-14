@@ -4,35 +4,29 @@ const dataFile = './data.txt';
 
 fs.readFile(dataFile, (err, data) => {
     if (err) throw err;
-    let firewall_template = parse_data(data.toString('utf8'));
-    
-    let delay = 32005;
+    let config = parse_data(data.toString('utf8'));
+
+    //let delay = 72825;
+    let delay = 0;
     let found = false;
+
     while (!found) {
-        let firewall = [];
-        Object.assign(firewall, firewall_template);
-
-        firewall = init_firewall(firewall);
-
-        for (let d = 0; d < delay; d++) {
-            firewall = move_scanners(firewall);
-        }
-
-        let results  = run_simulation(firewall);
+        let results  = run_simulation(delay, config);
 
         if (results.layersCaught.length == 0) {
             found = true;
-            console.log(`delay ${delay}: found!`);
+            console.log(`delay ${delay}: found! Severity: ${results.severity}`);
         }
         else {
+            console.log(`delay ${delay}: caught! Severity: ${results.severity}`);
             delay++;
-            console.log(`delay ${delay}: caught!`);
         }
     }
 });
 
 function parse_data (dataStr) {
-    let firewall = [];
+    let config = {};
+    config.layers = []; 
 
     dataStr = dataStr.trim();
 
@@ -41,63 +35,44 @@ function parse_data (dataStr) {
             let parts = line.split(/:\s*/);
             let index = parts[0] * 1, range = parts[1] * 1;
 
-            if(index > firewall.length) {
-                for (let i = firewall.length; i < index; i++) {
-                    firewall[i] = [];
+            if(index > config.layers.length) {
+                for (let i = config.layers.length; i < index; i++) {
+                    config.layers[i] = new Layer(i, 0);
                 }
             }
 
-            firewall[index] = [];
-            firewall[index].length = range;
+            config.layers[index] = new Layer(index, range);
         }
     });
 
-    return firewall;
+    return config;
 }
 
-function run_simulation (firewall) {
+function run_simulation (delay, config) {
     let results = {};
     let layerPos = { x: -1, y: 0 };
     results.layersCaught = [];
     results.severity = 0;
 
-    let picoseconds = firewall.length;
+    let picoseconds = config.layers.length;
 
     for (let tick = 0; tick < picoseconds; tick++) {
         // Move layer
         layerPos.x++;
 
-        // Check if caught
-        if (firewall[layerPos.x].length > 0) {
-            if (firewall[layerPos.x][layerPos.y] != 0) {
+        // Check if caught in Layer
+        if (config.layers[layerPos.x].range > 0) {
+            if (config.layers[layerPos.x].hitScanner(layerPos.x + delay)) {
                 results.layersCaught.push(layerPos.x);
             }
         }
-
-        if (results.layersCaught.length > 0) {
-            return results;
-        }
-
-        // Move Scanners
-        firewall = move_scanners(firewall);
     }
 
     results.layersCaught.forEach((layer) => {
-        results.severity += layer * firewall[layer].length;
+        results.severity += layer * config.layers[layer].range;
     });
 
     return results;
-}
-
-function init_firewall (firewall) {
-    firewall.forEach((layer) => {
-        if (layer.length == 0) return;
-
-        layer.fill(0);
-        layer[0] = 1;
-    });
-     
-    return firewall;
 }
 
 function Layer (index, range) {
@@ -105,47 +80,8 @@ function Layer (index, range) {
     this.range = range;
    
     this.hitScanner = (delay) => {
-        
+        if (delay  % (range + range - 2) == 0) return true;
+
+        return false;
     }; 
 }
-
-function move_scanners (firewall) {
-    for (let layer = 0; layer < firewall.length; layer++) {
-        if (firewall[layer].length > 0) {
-            let currentScannerPos = firewall[layer].findIndex((el) => { return el != 0; });
-
-            let dir = firewall[layer][currentScannerPos];
-
-            if (currentScannerPos == 0 && dir == -1) dir = 1;
-            if (currentScannerPos == firewall[layer].length - 1 && dir == 1) dir = -1;
-
-            if ((dir == 1 && currentScannerPos < firewall[layer].length - 1) || (dir == -1 && currentScannerPos > 0))
-                firewall[layer][currentScannerPos + dir] = dir;
-
-            firewall[layer][currentScannerPos] = 0;
-        }
-    }
-
-    return firewall;
-}
-
-/*
-function move_scanners (firewall) {
-    for (let layer = 0; layer < firewall.length; layer++) {
-        if (firewall[layer].length > 0) {
-            let currentScannerPos = firewall[layer].findIndex((el) => { return el != 0; });
-
-            let dir = firewall[layer][currentScannerPos];
-
-            if (currentScannerPos == 0 && dir == -1) dir = 1;
-            if (currentScannerPos == firewall[layer].length - 1 && dir == 1) dir = -1;
-
-            if ((dir == 1 && currentScannerPos < firewall[layer].length - 1) || (dir == -1 && currentScannerPos > 0))
-                firewall[layer][currentScannerPos + dir] = dir;
-
-            firewall[layer][currentScannerPos] = 0;
-        }
-    }
-
-    return firewall;
-}*/
